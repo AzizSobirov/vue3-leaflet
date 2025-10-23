@@ -1,103 +1,147 @@
 <template>
-  <div class="w-screen h-screen">
-    <div id="map"></div>
-  </div>
+  <div id="map"></div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 let map
-let geoLayer
-let clusterGroup
+let regionsLayer
+let districtsLayer
+let regionMarkers = []
 
 onMounted(async () => {
   map = L.map('map').setView([41.3, 64.6], 6)
 
-  // Tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18,
   }).addTo(map)
 
-  // Viloyatlar GeoJSON yuklash
-  const res = await fetch('/geojson/uz_regions.geojson')
-  const regionsData = await res.json()
+  await loadRegions()
 
-  geoLayer = L.geoJSON(regionsData, {
-    style: {
-      color: '#0077ff',
-      weight: 2,
-      fillColor: '#00aaff55',
-    },
-    onEachFeature: (feature, layer) => {
-      layer.on({
-        click: () => onRegionClick(feature, layer),
-      })
-      layer.bindTooltip(feature.properties.name)
-    },
-  }).addTo(map)
+  // 🔙 Dastlabki holatga qaytish uchun map click
+  map.on('click', (e) => {
+    if (map.getZoom() <= 6) return
+    map.setView([41.3, 64.6], 6)
+
+    resetToRegions()
+  })
 })
 
-async function onRegionClick(feature, layer) {
-  const regionName = feature.properties.name
-  const regionId = regionName?.toLowerCase().split(' ')[0]
+// 🗺️ Viloyatlar yuklash
+async function loadRegions() {
+  const res = await fetch('/geojson/uz_regions.geojson')
+  const data = await res.json()
 
-  // Zoom-in
+  // Viloyatlar chizish
+  regionsLayer = L.geoJSON(data, {
+    style: {
+      color: '#555',
+      weight: 1,
+      fillColor: '#ccc',
+      fillOpacity: 0.7,
+    },
+    onEachFeature: (feature, layer) => {
+      layer.on('click', () => onRegionClick(feature, layer))
+    },
+  }).addTo(map)
+
+  // Har bir viloyatga “cluster-style” marker
+  data.features.forEach((f) => {
+    const center = L.geoJSON(f).getBounds().getCenter()
+    const icon = L.divIcon({
+      html: `
+        <div style="
+          background:#e7f1ff;
+          border:2px solid #3a8dff;
+          color:#3a8dff;
+          border-radius:50%;
+          width:45px;
+          height:45px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-weight:600;
+          font-family:sans-serif;
+        ">${Math.floor(Math.random() * 300)}</div>`,
+      className: '',
+      iconSize: [45, 45],
+    })
+    const marker = L.marker(center, { icon }).addTo(map)
+    regionMarkers.push(marker)
+  })
+}
+
+// 📍 Viloyat tanlandi
+async function onRegionClick(feature, layer) {
+  console.log(feature)
+
+  // Zoom viloyatga
   map.fitBounds(layer.getBounds())
 
-  // 🧹 Oldingi layerlarni tozalash
-  if (geoLayer) map.removeLayer(geoLayer)
-  if (clusterGroup) map.removeLayer(clusterGroup)
+  // Oldingi layerlarni tozalash
+  clearMap()
 
-  // Tumanlar GeoJSON yuklash (local)
+  // Tumanlar yuklash
+  const regionName = feature.properties.name
+  const regionId = regionName.toLowerCase().split(' ')[0]
   const res = await fetch(`/geojson/districts/${regionId}.geojson`)
   const districtData = await res.json()
 
-  geoLayer = L.geoJSON(districtData, {
-    style: {
-      color: '#ff6600',
-      weight: 2,
-      fillColor: '#ffaa0044',
-    },
-    onEachFeature: (feature, layer) => {
-      layer.on({
-        click: () => showDistrictMarkers(feature, layer),
-      })
-      layer.bindTooltip(feature.properties.name)
-    },
-  }).addTo(map)
+  setTimeout(() => {
+    districtsLayer = L.geoJSON(districtData, {
+      style: {
+        color: '#ff6600',
+        weight: 1,
+        fillColor: '#ffbb3344',
+      },
+      onEachFeature: (f, l) => {
+        l.bindTooltip(f.properties.name)
+      },
+    }).addTo(map)
+
+    // Tumanga markerlar (fake)
+    const markers = []
+    for (let i = 0; i < 10; i++) {
+      const [lat, lng] = randomInBounds(layer.getBounds())
+      const marker = L.marker([lat, lng]).bindPopup(`<b>Loyiha ${i + 1}</b>`)
+      markers.push(marker)
+    }
+
+    // const group = L.markerClusterGroup()
+    // markers.forEach((m) => group.addLayer(m))
+    // map.addLayer(group)
+  }, 100)
 }
 
-function showDistrictMarkers(feature, layer) {
-  if (clusterGroup) map.removeLayer(clusterGroup)
+// 🔄 Dastlabki holatga qaytish
+function resetToRegions() {
+  clearMap()
+  // loadRegions()
+  // map.setView([41.3, 64.6], 6)
+}
 
-  // Tumanga zoom
-  map.fitBounds(layer.getBounds())
+// 🧹 Layer va markerlarni tozalash
+function clearMap() {
+  // if (regionsLayer) map.removeLayer(regionsLayer)
+  if (districtsLayer) map.removeLayer(districtsLayer)
+  regionMarkers.forEach((m) => map.removeLayer(m))
+  regionMarkers = []
+}
 
-  // 📍 Loyihalar (demo)
-  const projects = [
-    { coords: [41.31, 69.24], name: 'Project A' },
-    { coords: [41.315, 69.245], name: 'Project B' },
-    { coords: [41.33, 69.25], name: 'Project C' },
-  ]
-
-  // 🔵 Cluster group
-  clusterGroup = L.markerClusterGroup()
-
-  projects.forEach((p) => {
-    const marker = L.marker(p.coords).bindPopup(`<b>${p.name}</b>`)
-    clusterGroup.addLayer(marker)
-  })
-
-  map.addLayer(clusterGroup)
+// Random koordinata olish (tuman markazlari uchun)
+function randomInBounds(bounds) {
+  const lat = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth())
+  const lng = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest())
+  return [lat, lng]
 }
 </script>
 
 <style>
 #map {
   width: 100%;
-  height: 100%;
+  height: 100vh;
 }
 </style>
