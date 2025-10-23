@@ -12,6 +12,9 @@ let regionsLayer
 let districtsLayer
 let regionMarkers = []
 
+let lastClickedRegion = null
+let selectedRegionLayer = null
+
 onMounted(async () => {
   map = L.map('map').setView([41.3, 64.6], 6)
 
@@ -24,9 +27,14 @@ onMounted(async () => {
   // 🔙 Dastlabki holatga qaytish uchun map click
   map.on('click', (e) => {
     if (map.getZoom() <= 6) return
-    map.setView([41.3, 64.6], 6)
 
-    resetToRegions()
+    // Agar region ichida click bo‘lmagan bo‘lsa
+    if (!e.originalEvent._clickedRegion) {
+      console.log('Outside region clicked')
+
+      lastClickedRegion = null
+      resetToRegions()
+    }
   })
 })
 
@@ -44,7 +52,22 @@ async function loadRegions() {
       fillOpacity: 0.7,
     },
     onEachFeature: (feature, layer) => {
-      layer.on('click', () => onRegionClick(feature, layer))
+      layer.on('click', (e) => {
+        if (selectedRegionLayer) {
+          regionsLayer.resetStyle(selectedRegionLayer)
+        }
+
+        selectedRegionLayer = e.target
+
+        layer.setStyle({
+          fillColor: 'white',
+          fillOpacity: 0.9,
+        })
+
+        lastClickedRegion = feature
+        onRegionClick(feature, layer)
+        e.originalEvent._clickedRegion = true // flag
+      })
     },
   }).addTo(map)
 
@@ -76,8 +99,6 @@ async function loadRegions() {
 
 // 📍 Viloyat tanlandi
 async function onRegionClick(feature, layer) {
-  console.log(feature)
-
   // Zoom viloyatga
   map.fitBounds(layer.getBounds())
 
@@ -119,8 +140,8 @@ async function onRegionClick(feature, layer) {
 // 🔄 Dastlabki holatga qaytish
 function resetToRegions() {
   clearMap()
-  // loadRegions()
-  // map.setView([41.3, 64.6], 6)
+  loadRegions()
+  map.setView([41.3, 64.6], 6)
 }
 
 // 🧹 Layer va markerlarni tozalash
