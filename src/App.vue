@@ -137,7 +137,7 @@ async function onRegionClick(feature, layer) {
   }, 100)
 }
 
-// 🔄 Dastlabki holatga qaytish
+// Dastlabki holatga qaytish
 function resetToRegions() {
   clearMap()
   loadRegions()
