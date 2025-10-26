@@ -97,7 +97,7 @@ async function loadRegions() {
   })
 }
 
-// 📍 Viloyat tanlandi
+// Viloyat tanlandi
 async function onRegionClick(feature, layer) {
   // Zoom viloyatga
   map.fitBounds(layer.getBounds())
