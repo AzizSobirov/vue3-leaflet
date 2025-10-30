@@ -1,4 +1,4 @@
-# vue3-leaflet
+# vue3-leaflet map
 
 This template should help get you started developing with Vue 3 in Vite.
 
